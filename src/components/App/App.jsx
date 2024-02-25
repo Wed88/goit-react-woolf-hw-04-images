@@ -1,4 +1,4 @@
-import React, { Component } from 'react';
+import { useEffect, useState } from 'react';
 import { ToastContainer, toast } from 'react-toastify';
 import Searchbar from '../Searchbar/Searchbar';
 import ImageGallery from '../ImageGallery/ImageGallery';
@@ -10,28 +10,25 @@ import 'react-toastify/dist/ReactToastify.css';
 
 import './App.css';
 
-export default class App extends Component {
-  state = {
-    imageName: '',
-    images: {},
-    page: 1,
-    isLoading: false,
-    error: null,
-    showModal: false,
-    largeImageURL: null,
-  };
+export default function App() {
+  const [imageName, setImageName] = useState('');
+  const [images, setImages] = useState([]);
+  const [page, setPage] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [largeImageURL, setLargeImageURL] = useState(null);
 
-  async componentDidUpdate(prevProps, prevState) {
-    const prevName = prevState.imageName;
-    const newName = this.state.imageName;
-    const prevPage = prevState.page;
-    const newPage = this.state.page;
+  useEffect(() => {
+    if (imageName === '') {
+      return;
+    }
 
-    if (prevName !== newName || prevPage !== newPage) {
-      this.setState({ isLoading: true });
+    async function fetchImages() {
+      setIsLoading(true);
 
       try {
-        const data = await api.fetchImageNameWithQuery(newName, newPage);
+        const data = await api.fetchImageNameWithQuery(imageName, page);
 
         if (data.hits.length === 0) {
           toast.error(
@@ -40,67 +37,60 @@ export default class App extends Component {
 
           return;
         }
-        if (newPage * 12 >= data.totalHits) {
+
+        if (page * 12 >= data.totalHits) {
           toast.warn(
             'We are sorry, but you  reached the end of search results.'
           );
         }
 
-        newPage === 1
-          ? this.setState({ images: data.hits })
-          : this.setState(prevState => {
-              return { images: [...prevState.images, ...data.hits] };
+        page === 1
+          ? setImages(data.hits)
+          : setImages(prevState => {
+              return [...prevState, ...data.hits];
             });
       } catch (error) {
-        this.setState({ error });
+        setError(error);
       } finally {
-        this.setState({ isLoading: false });
+        setIsLoading(false);
       }
     }
-  }
+    fetchImages();
+  }, [imageName, page]);
 
-  toggleModal = largeImageURL => {
-    this.setState(({ showModal }) => ({
-      showModal: !showModal,
-    }));
-    this.setState({ largeImageURL: largeImageURL });
+  const toggleModal = largeImageURL => {
+    setShowModal(prevValue => !prevValue);
+    setLargeImageURL(largeImageURL);
   };
 
-  handleSearchbarSubmit = imageName => {
-    this.setState({ imageName, page: 1, images: [] });
+  const handleSearchbarSubmit = imageName => {
+    setImageName(imageName);
+    setPage(1);
+    setImages([]);
   };
 
-  handleIncrementPage = () => {
-    this.setState(prevState => {
-      return {
-        page: prevState.page + 1,
-      };
-    });
+  const handleIncrementPage = () => {
+    setPage(prevPage => prevPage + 1);
   };
 
-  render() {
-    const { images, isLoading, error, showModal, largeImageURL } = this.state;
-    const { handleSearchbarSubmit, toggleModal, handleIncrementPage } = this;
+  return (
+    <div className="App">
+      <Searchbar onSubmit={handleSearchbarSubmit} />
+      {error && <p>Whoops, something went wrong: {error.message}</p>}
+      {isLoading && <Loader />}
+      {images.length > 0 && (
+        <ImageGallery images={images} onOpenModal={toggleModal} />
+      )}
+      {images.length > 0 && images.length % 12 === 0 && (
+        <Button onClick={handleIncrementPage} />
+      )}
+      {showModal && (
+        <Modal onClose={toggleModal}>
+          <img src={largeImageURL} alt="" />
+        </Modal>
+      )}
 
-    return (
-      <div className="App">
-        <Searchbar onSubmit={handleSearchbarSubmit} />
-        {error && <p>Whoops, something went wrong: {error.message}</p>}
-        {isLoading && <Loader />}
-        {images.length > 0 && (
-          <ImageGallery images={images} onOpenModal={toggleModal} />
-        )}
-        {images.length > 0 && images.length % 12 === 0 && (
-          <Button onClick={handleIncrementPage} />
-        )}
-        {showModal && (
-          <Modal onClose={toggleModal}>
-            <img src={largeImageURL} alt="" />
-          </Modal>
-        )}
-
-        <ToastContainer position="top-center" autoClose={3000} />
-      </div>
-    );
-  }
+      <ToastContainer position="top-center" autoClose={3000} />
+    </div>
+  );
 }
